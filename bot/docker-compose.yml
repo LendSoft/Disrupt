@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: schedule-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - /home/bot_data/data:/app/data
+
+    environment:
+      BOT_TOKEN: "${BOT_TOKEN}"
+      BASE_URL: "${BASE_URL}"
+      API_URL: "${API_URL}"
+      ADMIN_IDS: "${ADMIN_IDS}"
+      DATA_DIR: "/app/data"
+      LOG_LEVEL: "${LOG_LEVEL}"

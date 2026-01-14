@@ -1,0 +1,10 @@
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+
+def main_menu_kb(is_admin: bool) -> ReplyKeyboardMarkup:
+    rows = [
+        [KeyboardButton(text="Старт")],
+        [KeyboardButton(text="Решения")],
+    ]
+    if is_admin:
+        rows.append([KeyboardButton(text="Админ панель")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
