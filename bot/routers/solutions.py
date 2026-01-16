@@ -1,5 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.enums import ParseMode
+from bot.utils.tg_render import render_report_md2
+
 
 from bot.keyboards.common import main_menu_kb
 from bot.keyboards.solutions import solutions_kb
@@ -79,8 +82,10 @@ async def my_solutions(message: Message, db, **_):
         prefix="",  # без user_id
     )
 
-    for part in _split_telegram(msg):
-        await message.answer(part)
+    msg_tg = render_report_md2(msg)
+    for part in _split_telegram(msg_tg):
+        await message.answer(part, parse_mode=ParseMode.MARKDOWN_V2)
+
 
 
 @router.message(F.text == "Все решения (staff)")
@@ -117,5 +122,7 @@ async def all_solutions_staff(message: Message, db, **_):
             prefix=f"user_id={uid}",
         )
 
-        for part in _split_telegram(msg):
-            await message.answer(part)
+        msg_tg = render_report_md2(msg)
+        for part in _split_telegram(msg_tg):
+            await message.answer(part, parse_mode=ParseMode.MARKDOWN_V2)
+

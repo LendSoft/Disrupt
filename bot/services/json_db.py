@@ -34,25 +34,48 @@ class JsonDB:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
     # ---------- roles ----------
+    # ---------- roles ----------
     async def is_moderator(self, user_id: int) -> bool:
         rows = await self._read(self.s.db_moderators_path)
         return any(int(x["user_id"]) == user_id for x in rows)
 
-    async def add_moderator(self, user_id: int) -> None:
+
+    async def add_moderator(self, user_id: int, username: str | None = None) -> None:
         rows = await self._read(self.s.db_moderators_path)
-        if any(int(x["user_id"]) == user_id for x in rows):
-            return
-        rows.append({"user_id": user_id})
+
+        # обновляем, если уже есть
+        for r in rows:
+            if int(r["user_id"]) == user_id:
+                if username is not None:
+                    r["username"] = username
+                await self._write(self.s.db_moderators_path, rows)
+                return
+
+        rows.append({"user_id": user_id, "username": username})
         await self._write(self.s.db_moderators_path, rows)
+
 
     async def remove_moderator(self, user_id: int) -> None:
         rows = await self._read(self.s.db_moderators_path)
         rows = [x for x in rows if int(x["user_id"]) != user_id]
         await self._write(self.s.db_moderators_path, rows)
 
-    async def list_moderators(self) -> List[int]:
+
+    async def find_moderator_id_by_username(self, username: str) -> int | None:
+        # username ожидаем без "@"
+        u = (username or "").lstrip("@").strip().lower()
+        if not u:
+            return None
         rows = await self._read(self.s.db_moderators_path)
-        return [int(x["user_id"]) for x in rows]
+        for r in rows:
+            if (r.get("username") or "").lower() == u:
+                return int(r["user_id"])
+        return None
+
+
+    async def list_moderators(self) -> List[Dict[str, Any]]:
+        return await self._read(self.s.db_moderators_path)
+
 
     # ---------- users/teams ----------
     async def upsert_user(self, user_id: int, captain_name: str) -> None:

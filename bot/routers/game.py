@@ -1,7 +1,7 @@
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-
+from aiogram.enums import ParseMode
 from bot.texts import RULES_TEXT
 from bot.states.game import GameStates
 from bot.services.randomizer import pick_base, pick_ogran
@@ -18,7 +18,25 @@ async def captain_name(message: Message, state: FSMContext, db, **_):
         await message.answer("Имя слишком короткое. Введите имя капитана ещё раз:")
         return
 
-    await db.upsert_user(message.from_user.id, captain)
+    # сохраняем ФИО + username (чтобы потом можно было искать по @)
+    await db.upsert_user(
+        user_id=message.from_user.id,
+        captain_name=captain,
+        username=message.from_user.username,
+    )
+
+    await message.answer("Введите город:")
+    await state.set_state(GameStates.city)
+
+@router.message(GameStates.city)
+async def city(message: Message, state: FSMContext, db, **_):
+    city = (message.text or "").strip()
+    if len(city) < 2:
+        await message.answer("Город слишком короткий. Введите город ещё раз:")
+        return
+
+    await db.set_user_city(message.from_user.id, city)
+
     await message.answer("Введите название команды:")
     await state.set_state(GameStates.team_name)
 

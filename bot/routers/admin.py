@@ -1,5 +1,6 @@
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.fsm.context import FSMContext
 
 from bot.decorators.access import admin_only
 from bot.keyboards.admin import admin_panel_kb
@@ -14,9 +15,11 @@ async def admin_panel(message: Message, **_):
 
 @router.message(F.text == "Назначить модератора")
 @admin_only
-async def ask_add_mod(message: Message, **_):
-    await message.answer("Пришлите user_id человека, которому выдать модератора.")
+async def ask_add_mod(message: Message, state: FSMContext, **_):
+    await state.update_data(admin_action="add_mod")
+    await message.answer("Пришлите user_id (числом) или @username человека, которому выдать модератора.")
 
+"""
 @router.message(F.text.regexp(r"^\d+$"))
 async def numeric_message_router(message: Message, role, db, **_):
     # Примитивный режим: если админ открыл панель и прислал число — трактуем как действие.
@@ -27,11 +30,14 @@ async def numeric_message_router(message: Message, role, db, **_):
     user_id = int(message.text)
     await db.add_moderator(user_id)
     await message.answer(f"Готово: user_id={user_id} теперь модератор.")
+"""
 
 @router.message(F.text == "Снять модератора")
 @admin_only
-async def ask_remove_mod(message: Message, **_):
-    await message.answer("Пришлите user_id человека, у которого снять модератора (числом).")
+async def ask_remove_mod(message: Message, state: FSMContext, **_):
+    await state.update_data(admin_action="remove_mod")
+    await message.answer("Пришлите user_id (числом) или @username человека, у которого снять модератора.")
+
 
 @router.message(F.text == "Список модераторов")
 @admin_only
@@ -40,9 +46,66 @@ async def list_mods(message: Message, db, **_):
     if not mods:
         await message.answer("Модераторов нет.")
         return
-    await message.answer("Модераторы:\n" + "\n".join(str(x) for x in mods))
+
+    lines = []
+    for m in mods:
+        uname = m.get("username")
+        lines.append(f"{m['user_id']}" + (f" (@{uname})" if uname else ""))
+    await message.answer("Модераторы:\n" + "\n".join(lines))
+
 
 @router.message(F.text == "Назад")
 async def back_from_admin(message: Message, role, **_):
     if role.is_admin:
         await message.answer("Главное меню.", reply_markup=main_menu_kb(is_admin=True))
+
+@router.message()
+async def admin_action_router(message: Message, state: FSMContext, role, db, **_):
+    if not role.is_admin:
+        return
+
+    data = await state.get_data()
+    action = data.get("admin_action")
+    if action not in ("add_mod", "remove_mod"):
+        return  # не в режиме админ-действия
+
+    raw = (message.text or "").strip()
+
+    # 1) если число — работаем как раньше
+    if raw.isdigit():
+        uid = int(raw)
+    # 2) если @username — ищем в нашей базе модераторов ИЛИ в users.json
+    elif raw.startswith("@"):
+        uname = raw.lstrip("@").strip()
+        # сначала попробуем найти среди уже назначенных модеров
+        uid = await db.find_moderator_id_by_username(uname)
+
+        # если не нашли — попробуем найти по users.json (если человек писал боту)
+        if uid is None:
+            users = await db._read(db.s.db_users_path)  # можно сделать отдельный метод, но быстро так
+            uid = None
+            for u in users:
+                if (u.get("username") or "").lower() == uname.lower():
+                    uid = int(u["user_id"])
+                    break
+
+        if uid is None:
+            await message.answer(
+                "Не удалось найти этого @username.\n"
+                "Попросите пользователя написать боту /start или добавьте модератора по user_id."
+            )
+            return
+    else:
+        await message.answer("Пришлите user_id (числом) или @username.")
+        return
+
+    if action == "add_mod":
+        # username можно сохранить, если есть в сообщении
+        username = raw.lstrip("@") if raw.startswith("@") else None
+        await db.add_moderator(uid, username=username)
+        await message.answer(f"Готово: user_id={uid} теперь модератор.")
+    else:
+        await db.remove_moderator(uid)
+        await message.answer(f"Готово: user_id={uid} больше не модератор.")
+
+    await state.update_data(admin_action=None)

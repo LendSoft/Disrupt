@@ -9,6 +9,9 @@ from bot.states.game import GameStates
 
 router = Router()
 
+# обновим username в профиле, если пользователь уже есть
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, role, db, **_):
     await state.clear()
@@ -19,6 +22,14 @@ async def cmd_start(message: Message, state: FSMContext, role, db, **_):
         caption=WELCOME_TEXT,
         reply_markup=main_menu_kb(is_admin=role.is_admin),
     )
+
+    user = await db.get_user(message.from_user.id)
+    if user:
+        await db.upsert_user(
+            user_id=message.from_user.id,
+            captain_name=user.get("captain_name") or "",
+            username=message.from_user.username,
+        )
 
     await message.answer("Введите ФИО капитана:")
     await state.set_state(GameStates.captain_name)
